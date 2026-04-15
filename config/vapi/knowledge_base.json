@@ -1,0 +1,7 @@
+{
+  "provider": "custom-knowledge-base",
+  "server": {
+    "url": "https://YOUR_BACKEND_DOMAIN/api/vapi/knowledge-base",
+    "secret": "YOUR_VAPI_WEBHOOK_SECRET"
+  }
+}

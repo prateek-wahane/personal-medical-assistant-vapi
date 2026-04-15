@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Personal Medical Assistant</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; max-width: 960px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
+    label { display: block; margin: .5rem 0 .25rem; }
+    input, button, select { padding: .65rem; border-radius: 8px; border: 1px solid #bbb; width: 100%; }
+    button { cursor: pointer; margin-top: 1rem; width: auto; }
+    pre { background: #f6f6f6; padding: 1rem; border-radius: 8px; overflow: auto; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Personal Medical Assistant</h1>
+  <p>Upload one or two blood reports, compare them, then speak with your Vapi assistant.</p>
+
+  <div class="card">
+    <h2>1) Upload a report</h2>
+    <form id="uploadForm">
+      <label for="reportFile">Report file</label>
+      <input id="reportFile" name="file" type="file" required />
+      <label for="reportDate">Report date</label>
+      <input id="reportDate" name="report_date" type="date" required />
+      <button type="submit">Upload report</button>
+    </form>
+    <pre id="uploadResult"></pre>
+  </div>
+
+  <div class="card">
+    <h2>2) Compare two reports</h2>
+    <div class="row">
+      <div>
+        <label for="reportA">Older report id</label>
+        <input id="reportA" type="text" />
+      </div>
+      <div>
+        <label for="reportB">Newer report id</label>
+        <input id="reportB" type="text" />
+      </div>
+    </div>
+    <button id="compareBtn">Compare</button>
+    <pre id="compareResult"></pre>
+  </div>
+
+  <div class="card">
+    <h2>3) Vapi web widget</h2>
+    <p>Paste your real Vapi assistant id and public key below.</p>
+    <div class="row">
+      <div>
+        <label for="assistantId">Vapi assistant id</label>
+        <input id="assistantId" type="text" placeholder="assistant_xxx" />
+      </div>
+      <div>
+        <label for="publicKey">Vapi public key</label>
+        <input id="publicKey" type="text" placeholder="public_key_xxx" />
+      </div>
+    </div>
+    <button id="mountWidgetBtn">Mount Vapi widget</button>
+    <div id="vapiWidgetNotice"></div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

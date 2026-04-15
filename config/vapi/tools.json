@@ -1,0 +1,83 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "get_latest_report_summary",
+      "description": "Retrieve the latest uploaded blood report summary for the user.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "compare_reports",
+      "description": "Compare two uploaded blood reports and explain what improved, worsened, or stayed stable.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "report_id_a": {
+            "type": "string",
+            "description": "The older report id"
+          },
+          "report_id_b": {
+            "type": "string",
+            "description": "The newer report id"
+          }
+        },
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_marker_recommendation",
+      "description": "Return educational guidance for a marker from a specific report, including food and lifestyle suggestions.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "report_id": {
+            "type": "string",
+            "description": "The report id to inspect"
+          },
+          "marker_key": {
+            "type": "string",
+            "description": "One of hemoglobin, ferritin, vitamin_b12, vitamin_d_25_oh, fasting_glucose, hba1c, ldl, triglycerides, etc."
+          }
+        },
+        "required": ["marker_key"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "schedule_next_checkup",
+      "description": "Create the next blood checkup event 6 months after the selected report date and remind the user in advance.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "report_id": {
+            "type": "string",
+            "description": "The report id used as the baseline date"
+          },
+          "months_after": {
+            "type": "integer",
+            "description": "How many months after the report date to schedule the checkup",
+            "default": 6
+          },
+          "reminder_days_before": {
+            "type": "integer",
+            "description": "How many days before the appointment the reminder should fire",
+            "default": 14
+          }
+        },
+        "required": []
+      }
+    }
+  }
+]

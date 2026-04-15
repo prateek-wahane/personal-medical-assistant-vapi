@@ -1,0 +1,13 @@
+{
+  "name": "Personal Medical Assistant",
+  "firstMessage": "Hi, I can review your blood report trends, explain what changed, and help schedule your next checkup.",
+  "model": {
+    "provider": "openai",
+    "model": "gpt-4o",
+    "temperature": 0.2
+  },
+  "voice": {
+    "provider": "11labs",
+    "voiceId": "21m00Tcm4TlvDq8ikWAM"
+  }
+}
