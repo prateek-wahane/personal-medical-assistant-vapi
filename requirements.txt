@@ -1,0 +1,14 @@
+fastapi==0.115.8
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+sqlalchemy==2.0.38
+pydantic==2.10.6
+pydantic-settings==2.7.1
+requests==2.32.3
+python-dateutil==2.9.0.post0
+PyPDF2==3.0.1
+google-api-python-client==2.161.0
+google-auth==2.38.0
+google-auth-oauthlib==1.2.1
+pytest==8.3.4
+httpx==0.28.1
