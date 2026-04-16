@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -5,10 +7,15 @@ from dateutil.relativedelta import relativedelta
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 from app.config import get_settings
 
 SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
+
+
+class CalendarServiceError(Exception):
+    pass
 
 
 def calculate_next_checkup_date(report_date, months_after: int = 6):
@@ -20,21 +27,28 @@ def _load_credentials() -> Credentials:
     token_path = Path(settings.google_token_file)
 
     if not token_path.exists():
-        raise FileNotFoundError(
+        raise CalendarServiceError(
             f"Google token file not found at {token_path}. Run scripts/google_calendar_auth.py first."
         )
 
-    creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
-    if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-        token_path.write_text(creds.to_json(), encoding="utf-8")
-    return creds
+    try:
+        creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            token_path.write_text(creds.to_json(), encoding="utf-8")
+        return creds
+    except Exception as exc:  # pragma: no cover - defensive catch around Google SDK
+        raise CalendarServiceError("Unable to load Google Calendar credentials.") from exc
 
 
 def create_calendar_event(report_date, months_after: int = 6, reminder_days_before: int = 14):
     settings = get_settings()
     creds = _load_credentials()
-    service = build("calendar", "v3", credentials=creds)
+
+    if months_after < 1:
+        raise CalendarServiceError("months_after must be at least 1.")
+    if reminder_days_before < 1:
+        raise CalendarServiceError("reminder_days_before must be at least 1.")
 
     next_date = calculate_next_checkup_date(report_date, months_after)
     start_dt = datetime(next_date.year, next_date.month, next_date.day, 9, 0, 0)
@@ -62,11 +76,13 @@ def create_calendar_event(report_date, months_after: int = 6, reminder_days_befo
         },
     }
 
-    created = (
-        service.events()
-        .insert(calendarId=settings.google_calendar_id, body=event_body)
-        .execute()
-    )
+    try:
+        service = build("calendar", "v3", credentials=creds)
+        created = service.events().insert(calendarId=settings.google_calendar_id, body=event_body).execute()
+    except HttpError as exc:
+        raise CalendarServiceError("Google Calendar rejected the event request.") from exc
+    except Exception as exc:  # pragma: no cover - defensive catch around Google SDK
+        raise CalendarServiceError("Unexpected calendar integration failure.") from exc
 
     return {
         "scheduled_date": next_date,

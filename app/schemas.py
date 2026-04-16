@@ -1,7 +1,31 @@
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
+
+
+class UserOut(BaseModel):
+    id: str
+    email: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
 
 
 class LabResultOut(BaseModel):
@@ -21,12 +45,16 @@ class LabResultOut(BaseModel):
 
 class ReportOut(BaseModel):
     id: str
+    user_id: str
     filename: str
+    stored_filename: str
+    content_type: str
+    file_size_bytes: int
     report_date: date
     summary_text: str
     parse_confidence: float
     uploaded_at: datetime
-    results: list[LabResultOut] = []
+    results: list[LabResultOut] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
@@ -34,7 +62,7 @@ class ReportOut(BaseModel):
 class UploadResponse(BaseModel):
     report: ReportOut
     marker_count: int
-    parse_warnings: list[str] = []
+    parse_warnings: list[str] = Field(default_factory=list)
 
 
 class CompareRequest(BaseModel):
@@ -74,8 +102,8 @@ class MarkerRecommendationResponse(BaseModel):
 
 class ScheduleRequest(BaseModel):
     report_id: str
-    months_after: int = 6
-    reminder_days_before: int = 14
+    months_after: int = Field(default=6, ge=1, le=24)
+    reminder_days_before: int = Field(default=14, ge=1, le=60)
 
 
 class ScheduleResponse(BaseModel):

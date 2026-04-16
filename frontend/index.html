@@ -5,21 +5,47 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Personal Medical Assistant</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 2rem; max-width: 960px; }
+    body { font-family: Arial, sans-serif; margin: 2rem; max-width: 1100px; }
     .card { border: 1px solid #ddd; border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
     label { display: block; margin: .5rem 0 .25rem; }
-    input, button, select { padding: .65rem; border-radius: 8px; border: 1px solid #bbb; width: 100%; }
+    input, button { padding: .65rem; border-radius: 8px; border: 1px solid #bbb; width: 100%; }
     button { cursor: pointer; margin-top: 1rem; width: auto; }
     pre { background: #f6f6f6; padding: 1rem; border-radius: 8px; overflow: auto; }
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .muted { color: #666; }
+    .badge { display: inline-block; padding: .25rem .5rem; background: #eef; border-radius: 999px; margin-bottom: .5rem; }
   </style>
 </head>
 <body>
   <h1>Personal Medical Assistant</h1>
-  <p>Upload one or two blood reports, compare them, then speak with your Vapi assistant.</p>
+  <p>Register or log in, upload blood reports, compare them, and then speak with your Vapi assistant.</p>
 
   <div class="card">
-    <h2>1) Upload a report</h2>
+    <h2>1) Register / Login</h2>
+    <div class="row">
+      <form id="registerForm">
+        <div class="badge">Register</div>
+        <label for="registerEmail">Email</label>
+        <input id="registerEmail" type="email" required />
+        <label for="registerPassword">Password</label>
+        <input id="registerPassword" type="password" minlength="8" required />
+        <button type="submit">Create account</button>
+      </form>
+      <form id="loginForm">
+        <div class="badge">Login</div>
+        <label for="loginEmail">Email</label>
+        <input id="loginEmail" type="email" required />
+        <label for="loginPassword">Password</label>
+        <input id="loginPassword" type="password" minlength="8" required />
+        <button type="submit">Login</button>
+      </form>
+    </div>
+    <div id="authStatus" class="muted"></div>
+    <pre id="authResult"></pre>
+  </div>
+
+  <div class="card">
+    <h2>2) Upload a report</h2>
     <form id="uploadForm">
       <label for="reportFile">Report file</label>
       <input id="reportFile" name="file" type="file" required />
@@ -31,7 +57,7 @@
   </div>
 
   <div class="card">
-    <h2>2) Compare two reports</h2>
+    <h2>3) Compare two reports</h2>
     <div class="row">
       <div>
         <label for="reportA">Older report id</label>
@@ -47,8 +73,8 @@
   </div>
 
   <div class="card">
-    <h2>3) Vapi web widget</h2>
-    <p>Paste your real Vapi assistant id and public key below.</p>
+    <h2>4) Vapi web widget</h2>
+    <p>Paste your real Vapi assistant id and public key below. For user isolation, start the call with your authenticated user id in assistant metadata or variable values.</p>
     <div class="row">
       <div>
         <label for="assistantId">Vapi assistant id</label>
@@ -60,7 +86,8 @@
       </div>
     </div>
     <button id="mountWidgetBtn">Mount Vapi widget</button>
-    <div id="vapiWidgetNotice"></div>
+    <div id="vapiWidgetNotice" class="muted"></div>
+    <div id="widgetMount"></div>
   </div>
 
   <script src="./app.js"></script>

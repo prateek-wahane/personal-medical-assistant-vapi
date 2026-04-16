@@ -5,54 +5,22 @@
 ```text
 User
   ↓
-Vapi Assistant
-  ↓
-Vapi Tools / KB Requests
+JWT Auth Layer
   ↓
 FastAPI Backend
-  ├─ Report parsing
-  ├─ Marker extraction
-  ├─ Report comparison
-  ├─ Recommendation engine
-  ├─ Calendar scheduling
-  └─ SQLite database
+  ├─ report upload and safe file storage
+  ├─ parser and lab normalization
+  ├─ comparison engine
+  ├─ educational recommendation engine
+  ├─ Google Calendar scheduling
+  ├─ Vapi tool and knowledge-base endpoints
+  └─ database via Alembic-managed schema
 ```
 
-## Main components
+## Main hardening changes
 
-### FastAPI backend
-Responsible for:
-- report upload
-- text extraction
-- marker normalization
-- report comparison
-- educational recommendation generation
-- calendar scheduling
-- Vapi tool dispatch
-
-### Database
-Local development uses SQLite.
-
-Tables are used for:
-- reports
-- lab results
-- checkup events
-
-### Vapi integration
-Vapi does the conversation layer. The backend handles the reliable structured actions.
-
-### Google Calendar
-Used to create the follow-up checkup and reminder.
-
-## Why structured comparison matters
-
-Comparing raw PDFs conversationally is unreliable. This project converts reports into structured marker data first, then compares numeric values directly.
-
-## Recommended production evolution
-
-- replace SQLite with PostgreSQL
-- store uploaded files in object storage
-- move heavy parsing into async jobs
-- add OCR pipeline for scanned PDFs
-- add auth and user isolation
-- add audit logs and observability
+- each report belongs to a `user_id`
+- report queries are scoped to the authenticated user
+- Vapi requests can also scope to a user via metadata or variable values
+- uploads are stored with generated filenames instead of user-supplied paths
+- migrations replace runtime schema creation

@@ -1,41 +1,62 @@
+from __future__ import annotations
+
 from datetime import date
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
-from app.models import CheckupEvent, LabResult, Report
-from app.schemas import CompareRequest, CompareResponse, MarkerRecommendationResponse, ReportOut, ScheduleRequest, ScheduleResponse, UploadResponse
-from app.services.calendar_service import create_calendar_event
+from app.models import CheckupEvent, LabResult, Report, User
+from app.schemas import (
+    CompareRequest,
+    CompareResponse,
+    MarkerRecommendationResponse,
+    ReportOut,
+    ScheduleRequest,
+    ScheduleResponse,
+    UploadResponse,
+)
+from app.services.auth import get_current_user
+from app.services.calendar_service import CalendarServiceError, create_calendar_event
 from app.services.comparison import compare_lab_results, summarize_comparison
 from app.services.lab_extractor import extract_lab_markers
 from app.services.pdf_parser import extract_text
 from app.services.recommendations import recommendation_for_marker
+from app.services.upload_security import build_stored_filename, sanitize_filename, validate_upload
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 
-@router.post("/upload", response_model=UploadResponse)
+@router.post("/upload", response_model=UploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_report(
     file: UploadFile = File(...),
     report_date: date = Form(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     settings = get_settings()
     upload_dir = Path(settings.upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     file_bytes = await file.read()
-    stored_path = upload_dir / file.filename
+    validate_upload(file, file_bytes, settings)
+
+    original_filename = sanitize_filename(file.filename or "report")
+    stored_filename = build_stored_filename(original_filename)
+    stored_path = upload_dir / stored_filename
     stored_path.write_bytes(file_bytes)
 
-    raw_text = extract_text(file_bytes, file.filename)
+    raw_text = extract_text(file_bytes, original_filename)
     parsed_markers, warnings, confidence = extract_lab_markers(raw_text)
 
     report = Report(
-        filename=file.filename,
+        user_id=current_user.id,
+        filename=original_filename,
+        stored_filename=stored_filename,
+        content_type=file.content_type or "application/octet-stream",
+        file_size_bytes=len(file_bytes),
         report_date=report_date,
         raw_text=raw_text,
         parse_confidence=confidence,
@@ -61,7 +82,7 @@ async def upload_report(
 
     abnormal = [m for m in parsed_markers if m.status in {"low", "high"}]
     report.summary_text = (
-        f"Parsed {len(parsed_markers)} markers from {file.filename}. "
+        f"Parsed {len(parsed_markers)} markers from {original_filename}. "
         + (
             "Abnormal markers: " + ", ".join(f"{m.marker_label} ({m.status})" for m in abnormal[:8])
             if abnormal
@@ -75,22 +96,38 @@ async def upload_report(
 
 
 @router.get("", response_model=list[ReportOut])
-def list_reports(db: Session = Depends(get_db)):
-    return db.query(Report).order_by(Report.report_date.desc(), Report.uploaded_at.desc()).all()
+def list_reports(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return (
+        db.query(Report)
+        .filter(Report.user_id == current_user.id)
+        .order_by(Report.report_date.desc(), Report.uploaded_at.desc())
+        .all()
+    )
 
 
 @router.get("/{report_id}", response_model=ReportOut)
-def get_report(report_id: str, db: Session = Depends(get_db)):
-    report = db.query(Report).filter(Report.id == report_id).first()
+def get_report(
+    report_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    report = db.query(Report).filter(Report.id == report_id, Report.user_id == current_user.id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     return report
 
 
 @router.post("/compare", response_model=CompareResponse)
-def compare_reports(payload: CompareRequest, db: Session = Depends(get_db)):
-    report_a = db.query(Report).filter(Report.id == payload.report_id_a).first()
-    report_b = db.query(Report).filter(Report.id == payload.report_id_b).first()
+def compare_reports(
+    payload: CompareRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    report_a = db.query(Report).filter(Report.id == payload.report_id_a, Report.user_id == current_user.id).first()
+    report_b = db.query(Report).filter(Report.id == payload.report_id_b, Report.user_id == current_user.id).first()
 
     if not report_a or not report_b:
         raise HTTPException(status_code=404, detail="One or both reports were not found")
@@ -105,8 +142,13 @@ def compare_reports(payload: CompareRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/{report_id}/recommendation/{marker_key}", response_model=MarkerRecommendationResponse)
-def marker_recommendation(report_id: str, marker_key: str, db: Session = Depends(get_db)):
-    report = db.query(Report).filter(Report.id == report_id).first()
+def marker_recommendation(
+    report_id: str,
+    marker_key: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    report = db.query(Report).filter(Report.id == report_id, Report.user_id == current_user.id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
@@ -126,16 +168,23 @@ def marker_recommendation(report_id: str, marker_key: str, db: Session = Depends
 
 
 @router.post("/schedule-next-checkup", response_model=ScheduleResponse)
-def schedule_next_checkup(payload: ScheduleRequest, db: Session = Depends(get_db)):
-    report = db.query(Report).filter(Report.id == payload.report_id).first()
+def schedule_next_checkup(
+    payload: ScheduleRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    report = db.query(Report).filter(Report.id == payload.report_id, Report.user_id == current_user.id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    calendar_result = create_calendar_event(
-        report.report_date,
-        months_after=payload.months_after,
-        reminder_days_before=payload.reminder_days_before,
-    )
+    try:
+        calendar_result = create_calendar_event(
+            report.report_date,
+            months_after=payload.months_after,
+            reminder_days_before=payload.reminder_days_before,
+        )
+    except CalendarServiceError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     event = CheckupEvent(
         report_id=report.id,

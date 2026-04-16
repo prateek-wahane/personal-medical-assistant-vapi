@@ -1,7 +1,7 @@
 from io import BytesIO
 from pathlib import Path
 
-from PyPDF2 import PdfReader
+from pypdf import PdfReader
 
 
 def extract_text(file_bytes: bytes, filename: str) -> str:

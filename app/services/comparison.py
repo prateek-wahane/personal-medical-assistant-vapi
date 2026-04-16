@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections import defaultdict
 from typing import Iterable
 
@@ -19,6 +21,10 @@ def _to_map(results: Iterable[LabResult]) -> dict[str, LabResult]:
     return {result.marker_key: result for result in results}
 
 
+def _normalize_unit(unit: str) -> str:
+    return "".join(unit.lower().split())
+
+
 def compare_lab_results(old_results: Iterable[LabResult], new_results: Iterable[LabResult]) -> list[dict]:
     old_map = _to_map(old_results)
     new_map = _to_map(new_results)
@@ -31,6 +37,26 @@ def compare_lab_results(old_results: Iterable[LabResult], new_results: Iterable[
         new = new_map.get(key)
 
         if old and new:
+            if old.unit and new.unit and _normalize_unit(old.unit) != _normalize_unit(new.unit):
+                entries.append(
+                    {
+                        "marker_key": key,
+                        "marker_label": new.marker_label,
+                        "previous_value": old.value,
+                        "current_value": new.value,
+                        "unit": f"{old.unit} -> {new.unit}",
+                        "delta": None,
+                        "previous_status": old.status,
+                        "current_status": new.status,
+                        "trend": "not-comparable-different-unit",
+                        "interpretation": (
+                            f"{new.marker_label} used different units across reports "
+                            f"({old.unit} vs {new.unit}), so direct comparison is unsafe."
+                        ),
+                    }
+                )
+                continue
+
             delta = round(new.value - old.value, 4)
             old_sev = _severity(old.value, old.reference_low, old.reference_high)
             new_sev = _severity(new.value, new.reference_low, new.reference_high)
@@ -49,6 +75,9 @@ def compare_lab_results(old_results: Iterable[LabResult], new_results: Iterable[
                 else:
                     trend = "stable" if abs(delta) < 0.0001 else "changed"
                 interpretation = f"{new.marker_label} changed by {delta:g} {new.unit}".strip()
+
+            if old.raw_range and new.raw_range and old.raw_range != new.raw_range:
+                interpretation += f" Reference range changed from {old.raw_range} to {new.raw_range}."
 
             entries.append(
                 {
@@ -104,7 +133,15 @@ def summarize_comparison(entries: list[dict]) -> str:
         buckets[entry["trend"]].append(entry["marker_label"])
 
     parts: list[str] = []
-    for key in ["improved", "worsened", "stable", "changed", "new-marker", "missing-in-new-report"]:
+    for key in [
+        "improved",
+        "worsened",
+        "stable",
+        "changed",
+        "not-comparable-different-unit",
+        "new-marker",
+        "missing-in-new-report",
+    ]:
         if buckets.get(key):
             labels = ", ".join(sorted(buckets[key]))
             parts.append(f"{key.replace('-', ' ')}: {labels}")

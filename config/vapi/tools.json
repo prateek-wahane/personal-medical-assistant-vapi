@@ -3,10 +3,15 @@
     "type": "function",
     "function": {
       "name": "get_latest_report_summary",
-      "description": "Retrieve the latest uploaded blood report summary for the user.",
+      "description": "Retrieve the latest uploaded blood report summary for the current user.",
       "parameters": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "description": "Optional current authenticated user id, usually injected as assistant metadata or variable value."
+          }
+        },
         "required": []
       }
     }
@@ -19,6 +24,10 @@
       "parameters": {
         "type": "object",
         "properties": {
+          "user_id": {
+            "type": "string",
+            "description": "Optional current authenticated user id."
+          },
           "report_id_a": {
             "type": "string",
             "description": "The older report id"
@@ -40,6 +49,10 @@
       "parameters": {
         "type": "object",
         "properties": {
+          "user_id": {
+            "type": "string",
+            "description": "Optional current authenticated user id."
+          },
           "report_id": {
             "type": "string",
             "description": "The report id to inspect"
@@ -61,6 +74,10 @@
       "parameters": {
         "type": "object",
         "properties": {
+          "user_id": {
+            "type": "string",
+            "description": "Optional current authenticated user id."
+          },
           "report_id": {
             "type": "string",
             "description": "The report id used as the baseline date"

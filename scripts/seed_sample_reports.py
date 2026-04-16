@@ -1,12 +1,14 @@
 from datetime import date
 
 from app.db import SessionLocal
-from app.models import LabResult, Report
+from app.models import LabResult, Report, User
+from app.services.auth import hash_password
 
 
 SAMPLES = [
     {
         "filename": "sample_report_old.txt",
+        "stored_filename": "seed_sample_report_old.txt",
         "report_date": date(2025, 10, 15),
         "summary_text": "Older baseline report with low hemoglobin and low ferritin.",
         "markers": [
@@ -19,6 +21,7 @@ SAMPLES = [
     },
     {
         "filename": "sample_report_new.txt",
+        "stored_filename": "seed_sample_report_new.txt",
         "report_date": date(2026, 4, 15),
         "summary_text": "Newer report with improved hemoglobin and ferritin but LDL still elevated.",
         "markers": [
@@ -35,9 +38,19 @@ SAMPLES = [
 def main():
     db = SessionLocal()
     try:
+        user = db.query(User).filter(User.email == "demo@example.com").first()
+        if not user:
+            user = User(email="demo@example.com", password_hash=hash_password("demo-password"))
+            db.add(user)
+            db.flush()
+
         for sample in SAMPLES:
             report = Report(
+                user_id=user.id,
                 filename=sample["filename"],
+                stored_filename=sample["stored_filename"],
+                content_type="text/plain",
+                file_size_bytes=0,
                 report_date=sample["report_date"],
                 summary_text=sample["summary_text"],
                 parse_confidence=0.9,
@@ -62,7 +75,7 @@ def main():
                     )
                 )
         db.commit()
-        print("Seeded sample reports.")
+        print(f"Seeded sample reports for demo@example.com (password: demo-password)")
     finally:
         db.close()
 

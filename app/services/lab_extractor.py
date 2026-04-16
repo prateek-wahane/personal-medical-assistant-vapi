@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import math
 import re
 from dataclasses import dataclass
+from typing import Iterable
 
 
 @dataclass
@@ -29,17 +32,17 @@ ALIAS_MAP: dict[str, list[str]] = {
     "serum_iron": ["serum iron", "iron"],
     "vitamin_b12": ["vitamin b12", "b12", "cobalamin"],
     "folate": ["folate", "folic acid"],
-    "vitamin_d_25_oh": ["vitamin d", "25-oh vitamin d", "25 hydroxy vitamin d", "25-ohd"],
-    "fasting_glucose": ["fasting glucose", "fasting blood sugar", "fbs", "glucose fasting"],
+    "vitamin_d_25_oh": ["25-oh vitamin d", "25 hydroxy vitamin d", "25-ohd", "vitamin d"],
+    "fasting_glucose": ["fasting glucose", "fasting blood sugar", "glucose fasting", "fbs"],
     "hba1c": ["hba1c", "glycated hemoglobin", "glycosylated hemoglobin"],
     "total_cholesterol": ["total cholesterol", "cholesterol total"],
-    "ldl": ["ldl", "ldl cholesterol"],
-    "hdl": ["hdl", "hdl cholesterol"],
+    "ldl": ["ldl cholesterol", "ldl"],
+    "hdl": ["hdl cholesterol", "hdl"],
     "triglycerides": ["triglycerides", "tg"],
-    "creatinine": ["creatinine", "serum creatinine"],
-    "alt": ["alt", "sgpt", "alanine aminotransferase"],
-    "ast": ["ast", "sgot", "aspartate aminotransferase"],
-    "tsh": ["tsh", "thyroid stimulating hormone"],
+    "creatinine": ["serum creatinine", "creatinine"],
+    "alt": ["alanine aminotransferase", "sgpt", "alt"],
+    "ast": ["aspartate aminotransferase", "sgot", "ast"],
+    "tsh": ["thyroid stimulating hormone", "tsh"],
 }
 
 PREFERRED_LABELS = {
@@ -68,6 +71,13 @@ PREFERRED_LABELS = {
     "tsh": "TSH",
 }
 
+RANGE_PATTERNS = [
+    re.compile(r"(?P<low>-?\d+(?:\.\d+)?)\s*(?:-|–|to)\s*(?P<high>-?\d+(?:\.\d+)?)", re.IGNORECASE),
+    re.compile(r"(?:ref(?:erence)?|range)?\s*(?:<|<=|upto|up to)\s*(?P<high>-?\d+(?:\.\d+)?)", re.IGNORECASE),
+    re.compile(r"(?:ref(?:erence)?|range)?\s*(?:>|>=)\s*(?P<low>-?\d+(?:\.\d+)?)", re.IGNORECASE),
+]
+NUMBER_RE = re.compile(r"[-+]?\d+(?:\.\d+)?")
+
 
 def _norm(s: str) -> str:
     return re.sub(r"\s+", " ", s.strip().lower())
@@ -75,43 +85,83 @@ def _norm(s: str) -> str:
 
 def _parse_float(token: str) -> float | None:
     token = token.replace(",", "").strip()
+    match = NUMBER_RE.search(token)
+    if not match:
+        return None
     try:
-        return float(token)
+        return float(match.group(0))
     except ValueError:
         return None
 
 
-def _extract_reference_range(line: str) -> tuple[float | None, float | None, str]:
-    patterns = [
-        r"(?P<low>-?\d+(?:\.\d+)?)\s*(?:-|–|to)\s*(?P<high>-?\d+(?:\.\d+)?)",
-        r"ref(?:erence)?[:\s]+(?P<low>-?\d+(?:\.\d+)?)\s*(?:-|–|to)\s*(?P<high>-?\d+(?:\.\d+)?)",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, line, flags=re.IGNORECASE)
-        if match:
-            low = _parse_float(match.group("low"))
-            high = _parse_float(match.group("high"))
-            return low, high, f"{match.group('low')}-{match.group('high')}"
+def _find_best_match(norm_line: str, consumed: set[str]) -> tuple[str, str, tuple[int, int]] | None:
+    candidates: list[tuple[int, int, str, str, tuple[int, int]]] = []
+    for marker_key, aliases in ALIAS_MAP.items():
+        if marker_key in consumed:
+            continue
+        for alias in aliases:
+            pattern = re.compile(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])")
+            match = pattern.search(norm_line)
+            if match:
+                span = match.span()
+                candidates.append((span[0], -len(alias), marker_key, alias, span))
+    if not candidates:
+        return None
+    _, _, marker_key, alias, span = sorted(candidates)[0]
+    return marker_key, alias, span
+
+
+def _extract_reference_range(text: str) -> tuple[float | None, float | None, str]:
+    for pattern in RANGE_PATTERNS:
+        match = pattern.search(text)
+        if not match:
+            continue
+        low = _parse_float(match.groupdict().get("low") or "")
+        high = _parse_float(match.groupdict().get("high") or "")
+        raw = match.group(0).replace("reference", "").replace("ref", "").strip(" :-")
+        return low, high, raw
     return None, None, ""
 
 
-def _extract_value_and_unit(line: str) -> tuple[float | None, str]:
-    match = re.search(r"(-?\d+(?:\.\d+)?)\s*([%A-Za-zµμ/\^0-9.-]*)", line)
-    if not match:
-        return None, ""
-    value = _parse_float(match.group(1))
-    unit = (match.group(2) or "").strip()
-    return value, unit
+def _extract_status_flag(text: str) -> str | None:
+    tokens = [token.upper() for token in re.findall(r"\b[A-Za-z]+\b", text)]
+    if "LOW" in tokens or "L" in tokens:
+        return "low"
+    if "HIGH" in tokens or "H" in tokens:
+        return "high"
+    if "NORMAL" in tokens or "N" in tokens:
+        return "normal"
+    return None
 
 
-def _status_from_range(value: float, low: float | None, high: float | None) -> str:
+def _extract_value_and_unit(text: str) -> tuple[float | None, str]:
+    tokens = re.findall(r"[^\s]+", text)
+    for index, token in enumerate(tokens):
+        value = _parse_float(token)
+        if value is None or math.isnan(value):
+            continue
+
+        unit_parts: list[str] = []
+        for next_token in tokens[index + 1:]:
+            upper = next_token.upper().strip()
+            if NUMBER_RE.search(next_token):
+                break
+            if upper in {"L", "H", "LOW", "HIGH", "NORMAL", "REF", "REFERENCE", "RANGE"}:
+                break
+            unit_parts.append(next_token)
+        unit = " ".join(unit_parts).strip("()[]")
+        return value, unit
+    return None, ""
+
+
+def _status_from_range(value: float, low: float | None, high: float | None, explicit_flag: str | None) -> str:
     if low is None and high is None:
-        return "unknown"
+        return explicit_flag or "unknown"
     if low is not None and value < low:
         return "low"
     if high is not None and value > high:
         return "high"
-    return "normal"
+    return explicit_flag or "normal"
 
 
 def extract_lab_markers(raw_text: str) -> tuple[list[ParsedMarker], list[str], float]:
@@ -123,35 +173,35 @@ def extract_lab_markers(raw_text: str) -> tuple[list[ParsedMarker], list[str], f
 
     for line in lines:
         norm_line = _norm(line)
-        for marker_key, aliases in ALIAS_MAP.items():
-            if marker_key in consumed:
-                continue
+        match_info = _find_best_match(norm_line, consumed)
+        if not match_info:
+            continue
 
-            if not any(alias in norm_line for alias in aliases):
-                continue
+        marker_key, _alias, span = match_info
+        value_region = line[span[1]:].strip(" :-	")
+        value, unit = _extract_value_and_unit(value_region)
+        if value is None or math.isnan(value):
+            warnings.append(f"Could not parse value for line: {line[:120]}")
+            continue
 
-            value, unit = _extract_value_and_unit(line)
-            if value is None or math.isnan(value):
-                warnings.append(f"Could not parse value for line: {line[:80]}")
-                continue
+        low, high, raw_range = _extract_reference_range(value_region)
+        explicit_flag = _extract_status_flag(value_region)
+        status = _status_from_range(value, low, high, explicit_flag)
 
-            low, high, raw_range = _extract_reference_range(line)
-            status = _status_from_range(value, low, high)
-            parsed.append(
-                ParsedMarker(
-                    marker_key=marker_key,
-                    marker_label=PREFERRED_LABELS.get(marker_key, marker_key.replace("_", " ").title()),
-                    value=value,
-                    unit=unit,
-                    reference_low=low,
-                    reference_high=high,
-                    raw_range=raw_range,
-                    status=status,
-                    raw_line=line,
-                )
+        parsed.append(
+            ParsedMarker(
+                marker_key=marker_key,
+                marker_label=PREFERRED_LABELS.get(marker_key, marker_key.replace("_", " ").title()),
+                value=value,
+                unit=unit,
+                reference_low=low,
+                reference_high=high,
+                raw_range=raw_range,
+                status=status,
+                raw_line=line,
             )
-            consumed.add(marker_key)
-            break
+        )
+        consumed.add(marker_key)
 
     confidence = round(len(parsed) / max(8, len(ALIAS_MAP)), 2)
     if not parsed:

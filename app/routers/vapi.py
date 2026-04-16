@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import hmac
 from hashlib import sha256
+from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -20,14 +23,35 @@ def _verify_secret(body: bytes, provided_signature: str | None):
     if not provided_signature:
         raise HTTPException(status_code=401, detail="Missing Vapi signature header")
 
-    digest = hmac.new(
-        settings.vapi_webhook_secret.encode("utf-8"),
-        body,
-        sha256,
-    ).hexdigest()
-
-    if not hmac.compare_digest(digest, provided_signature):
+    digest = hmac.new(settings.vapi_webhook_secret.encode("utf-8"), body, sha256).hexdigest()
+    expected_variants = {digest, f"sha256={digest}"}
+    if provided_signature.strip() not in expected_variants:
         raise HTTPException(status_code=401, detail="Invalid Vapi signature")
+
+
+def _extract_user_id(payload: dict[str, Any], tool_args: dict[str, Any] | None = None) -> str | None:
+    tool_args = tool_args or {}
+    message = payload.get("message", {}) or {}
+    call = message.get("call", {}) or {}
+    candidate_paths = [
+        tool_args.get("user_id"),
+        payload.get("userId"),
+        payload.get("user_id"),
+        (payload.get("metadata") or {}).get("userId"),
+        (payload.get("metadata") or {}).get("user_id"),
+        message.get("userId"),
+        message.get("user_id"),
+        (message.get("metadata") or {}).get("userId"),
+        (message.get("metadata") or {}).get("user_id"),
+        (call.get("metadata") or {}).get("userId"),
+        (call.get("metadata") or {}).get("user_id"),
+        ((call.get("assistantOverrides") or {}).get("variableValues") or {}).get("userId"),
+        ((call.get("assistantOverrides") or {}).get("variableValues") or {}).get("user_id"),
+    ]
+    for value in candidate_paths:
+        if value:
+            return str(value)
+    return None
 
 
 @router.post("/tool-calls")
@@ -46,13 +70,10 @@ async def tool_calls(
 
     results = []
     for tool_call in message.get("toolCallList", []):
-        result = handle_tool_call(db, tool_call.get("name", ""), tool_call.get("arguments", {}) or {})
-        results.append(
-            {
-                "toolCallId": tool_call.get("id"),
-                "result": result,
-            }
-        )
+        arguments = tool_call.get("arguments", {}) or {}
+        user_id = _extract_user_id(payload, arguments)
+        result = handle_tool_call(db, tool_call.get("name", ""), arguments, user_id=user_id)
+        results.append({"toolCallId": tool_call.get("id"), "result": result})
     return {"results": results}
 
 
@@ -77,5 +98,8 @@ async def knowledge_base(
             latest_user_message = item.get("content", "")
             break
 
-    documents = search_reports(db, latest_user_message)
+    user_id = _extract_user_id(payload)
+    if not user_id:
+        return {"documents": []}
+    documents = search_reports(db, latest_user_message, user_id=user_id)
     return {"documents": documents}

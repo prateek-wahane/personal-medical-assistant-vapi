@@ -1,20 +1,37 @@
+from __future__ import annotations
+
 from sqlalchemy.orm import Session
 
 from app.models import CheckupEvent, Report
-from app.services.calendar_service import create_calendar_event
+from app.services.calendar_service import CalendarServiceError, create_calendar_event
 from app.services.comparison import compare_lab_results, summarize_comparison
 from app.services.recommendations import recommendation_for_marker
 
 
-def _latest_report(db: Session) -> Report | None:
-    return db.query(Report).order_by(Report.report_date.desc(), Report.uploaded_at.desc()).first()
+def _latest_report(db: Session, user_id: str | None = None) -> Report | None:
+    query = db.query(Report)
+    if user_id:
+        query = query.filter(Report.user_id == user_id)
+    return query.order_by(Report.report_date.desc(), Report.uploaded_at.desc()).first()
 
 
-def handle_tool_call(db: Session, tool_name: str, arguments: dict) -> dict:
+def _scoped_report(db: Session, report_id: str | None, user_id: str | None) -> Report | None:
+    if report_id:
+        query = db.query(Report).filter(Report.id == report_id)
+        if user_id:
+            query = query.filter(Report.user_id == user_id)
+        return query.first()
+    return _latest_report(db, user_id=user_id)
+
+
+def handle_tool_call(db: Session, tool_name: str, arguments: dict, *, user_id: str | None = None) -> dict:
+    if not user_id:
+        return {"message": "User context is required for Vapi tool calls. Pass userId in assistant metadata or variable values."}
+
     if tool_name == "get_latest_report_summary":
-        report = _latest_report(db)
+        report = _latest_report(db, user_id=user_id)
         if not report:
-            return {"message": "No reports are available yet. Please upload a blood report first."}
+            return {"message": "No reports are available yet for this user. Please upload a blood report first."}
         return {
             "report_id": report.id,
             "report_date": report.report_date.isoformat(),
@@ -22,11 +39,14 @@ def handle_tool_call(db: Session, tool_name: str, arguments: dict) -> dict:
         }
 
     if tool_name == "compare_reports":
-        old_report = db.query(Report).filter(Report.id == arguments.get("report_id_a")).first()
-        new_report = db.query(Report).filter(Report.id == arguments.get("report_id_b")).first()
+        old_report = _scoped_report(db, arguments.get("report_id_a"), user_id)
+        new_report = _scoped_report(db, arguments.get("report_id_b"), user_id)
 
         if not old_report or not new_report:
-            reports = db.query(Report).order_by(Report.report_date.desc()).limit(2).all()
+            reports_query = db.query(Report)
+            if user_id:
+                reports_query = reports_query.filter(Report.user_id == user_id)
+            reports = reports_query.order_by(Report.report_date.desc()).limit(2).all()
             if len(reports) < 2:
                 return {"message": "Two reports are needed for comparison."}
             new_report, old_report = reports[0], reports[1]
@@ -40,12 +60,12 @@ def handle_tool_call(db: Session, tool_name: str, arguments: dict) -> dict:
         }
 
     if tool_name == "get_marker_recommendation":
-        report_id = arguments.get("report_id")
+        report = _scoped_report(db, arguments.get("report_id"), user_id)
         marker_key = arguments.get("marker_key")
-
-        report = db.query(Report).filter(Report.id == report_id).first() if report_id else _latest_report(db)
         if not report:
             return {"message": "No report found for recommendation."}
+        if not marker_key:
+            return {"message": "marker_key is required."}
 
         marker = next((item for item in report.results if item.marker_key == marker_key), None)
         if not marker:
@@ -62,19 +82,21 @@ def handle_tool_call(db: Session, tool_name: str, arguments: dict) -> dict:
         }
 
     if tool_name == "schedule_next_checkup":
-        report_id = arguments.get("report_id")
+        report = _scoped_report(db, arguments.get("report_id"), user_id)
         months_after = int(arguments.get("months_after", 6))
         reminder_days_before = int(arguments.get("reminder_days_before", 14))
-
-        report = db.query(Report).filter(Report.id == report_id).first() if report_id else _latest_report(db)
         if not report:
             return {"message": "No report found to schedule the next checkup."}
 
-        calendar_result = create_calendar_event(
-            report.report_date,
-            months_after=months_after,
-            reminder_days_before=reminder_days_before,
-        )
+        try:
+            calendar_result = create_calendar_event(
+                report.report_date,
+                months_after=months_after,
+                reminder_days_before=reminder_days_before,
+            )
+        except CalendarServiceError as exc:
+            return {"message": str(exc)}
+
         event = CheckupEvent(
             report_id=report.id,
             scheduled_date=calendar_result["scheduled_date"],
