@@ -16,11 +16,25 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("reports", sa.Column("ocr_used", sa.Boolean(), nullable=False, server_default=sa.text("0")))
-    op.add_column("reports", sa.Column("extraction_method", sa.String(length=50), nullable=False, server_default="native-text"))
+    op.add_column(
+        "reports",
+        sa.Column("ocr_used", sa.Boolean(), nullable=False, server_default=sa.false()),
+    )
+    op.add_column(
+        "reports",
+        sa.Column(
+            "extraction_method",
+            sa.String(length=50),
+            nullable=False,
+            server_default=sa.text("'native-text'"),
+        ),
+    )
     op.create_index("ix_reports_user_report_date", "reports", ["user_id", "report_date"], unique=False)
     op.create_index("ix_lab_results_report_marker", "lab_results", ["report_id", "marker_key"], unique=False)
     op.create_index("ix_checkup_events_report_scheduled_date", "checkup_events", ["report_id", "scheduled_date"], unique=False)
+
+    op.alter_column("reports", "ocr_used", server_default=None)
+    op.alter_column("reports", "extraction_method", server_default=None)
 
 
 def downgrade() -> None:
