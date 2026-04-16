@@ -1,25 +1,22 @@
 # Personal Medical Assistant with Vapi
 
 A production-oriented starter project for a **voice-based personal medical assistant** that can:
-
-- accept blood report uploads
-- extract common lab markers from a report
-- compare two reports and explain what improved or worsened
-- provide **educational** food, supplement, and lifestyle guidance with medical safety guardrails
+- upload and parse blood reports
+- compare report trends over time
+- provide educational nutrition and lifestyle guidance
 - schedule the next blood checkup **6 months later**
 - create a Google Calendar event with a **14-day reminder**
 - expose **Vapi custom tool** and **custom knowledge-base** endpoints
 - isolate each user’s reports with login-based access control
 
-## What changed in this hardened version
+## What changed in this production pass
 
-- added **JWT auth** and per-user report ownership
-- added **Alembic migrations** instead of runtime `create_all`
-- hardened uploads with file-type, size, and filename protections
-- fixed parser bugs for labels containing numbers such as **Vitamin B12** and **25-OH Vitamin D**
-- improved comparison safety for **unit mismatches** and reference-range changes
-- updated Vapi signature handling to support the documented `sha256=...` header format
-- updated the frontend to the current Vapi web widget embed pattern
+- PostgreSQL-ready SQLAlchemy engine settings and CI migration smoke tests
+- secret-file support for Cloud Run / Secret Manager style mounts
+- OCR fallback for scanned PDFs using **OCRmyPDF + Tesseract**
+- request-id headers, structured-log option, readiness endpoint, security headers, and basic rate limiting
+- Cloud Run service and OCR job templates
+- Docker image updated with OCR runtime dependencies
 
 ## Quick start
 
@@ -32,21 +29,22 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-On Windows PowerShell:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-copy .env.example .env
-alembic upgrade head
-uvicorn app.main:app --reload
-```
-
 Open:
 - API docs: `http://localhost:8000/docs`
-- Health check: `http://localhost:8000/health`
+- Health: `http://localhost:8000/health`
+- Ready: `http://localhost:8000/ready`
 - Frontend: open `frontend/index.html`
+
+## Production quick start with PostgreSQL
+
+```bash
+docker compose -f docker-compose.prod.yml up --build
+```
+
+This starts:
+- PostgreSQL 16
+- the API container with Alembic migration on boot
+- OCR runtime dependencies preinstalled in the image
 
 ## First-use flow
 
@@ -73,21 +71,22 @@ you can use:
 ## Documentation
 
 - [Install and local setup](docs/INSTALL.md)
-- [Vapi integration setup](docs/VAPI_SETUP.md)
-- [Google Calendar setup](docs/GOOGLE_CALENDAR_SETUP.md)
-- [Architecture](docs/ARCHITECTURE.md)
 - [API reference](docs/API.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Vapi setup](docs/VAPI_SETUP.md)
+- [Google Calendar setup](docs/GOOGLE_CALENDAR_SETUP.md)
 - [Testing](docs/TESTING.md)
 - [Deployment](docs/DEPLOYMENT.md)
+- [Production hardening notes](docs/PRODUCTION.md)
 - [Safety and scope](docs/SAFETY.md)
 
 ## Production notes
 
-This repo is a strong MVP starter, not a medical device.
+This repo is a strong production-shaped starter, not a medical device.
 
 Still recommended before real-world rollout:
 - lab-specific parser tuning across your report providers
-- optional OCR pipeline for scanned-image PDFs
-- secret management in your deployment platform
-- observability, backups, and incident handling
+- optional OCR language packs beyond English
+- managed PostgreSQL, object storage, backups, and secret rotation
+- observability dashboards and alerting
 - clinician review of recommendation wording and escalation thresholds

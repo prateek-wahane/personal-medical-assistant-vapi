@@ -15,18 +15,21 @@ from app.services.vapi_dispatch import handle_tool_call
 router = APIRouter(prefix="/api/vapi", tags=["vapi"])
 
 
+
 def _verify_secret(body: bytes, provided_signature: str | None):
     settings = get_settings()
-    if not settings.vapi_webhook_secret:
+    resolved_secret = settings.resolved_vapi_webhook_secret
+    if not resolved_secret:
         return
 
     if not provided_signature:
         raise HTTPException(status_code=401, detail="Missing Vapi signature header")
 
-    digest = hmac.new(settings.vapi_webhook_secret.encode("utf-8"), body, sha256).hexdigest()
+    digest = hmac.new(resolved_secret.encode("utf-8"), body, sha256).hexdigest()
     expected_variants = {digest, f"sha256={digest}"}
     if provided_signature.strip() not in expected_variants:
         raise HTTPException(status_code=401, detail="Invalid Vapi signature")
+
 
 
 def _extract_user_id(payload: dict[str, Any], tool_args: dict[str, Any] | None = None) -> str | None:

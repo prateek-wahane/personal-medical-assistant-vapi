@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -5,12 +7,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
+from app.middleware.observability import RequestContextMiddleware, SimpleRateLimitMiddleware, configure_logging
 from app.routers.auth import router as auth_router
 from app.routers.health import router as health_router
 from app.routers.reports import router as reports_router
 from app.routers.vapi import router as vapi_router
 
 settings = get_settings()
+configure_logging()
 
 
 @asynccontextmanager
@@ -21,8 +25,8 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.2.0",
-    description="Starter backend for a Vapi-powered personal medical assistant.",
+    version="0.3.0",
+    description="Production-hardened starter backend for a Vapi-powered personal medical assistant.",
     lifespan=lifespan,
 )
 
@@ -33,6 +37,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestContextMiddleware)
+app.add_middleware(SimpleRateLimitMiddleware)
 
 app.include_router(health_router)
 app.include_router(auth_router)

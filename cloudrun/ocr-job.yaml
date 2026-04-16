@@ -1,0 +1,36 @@
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: personal-medical-assistant-ocr-backfill
+spec:
+  template:
+    spec:
+      taskCount: 1
+      template:
+        spec:
+          serviceAccountName: personal-medical-assistant-sa
+          containers:
+            - image: REGION-docker.pkg.dev/PROJECT_ID/personal-medical-assistant/app:latest
+              args: ["python", "-m", "scripts.backfill_ocr_reports", "--limit", "100"]
+              env:
+                - name: APP_ENV
+                  value: prod
+                - name: JSON_LOGS
+                  value: "true"
+                - name: OCR_ENABLED
+                  value: "true"
+                - name: AUTH_SECRET_KEY_FILE
+                  value: /secrets/auth-secret
+                - name: VAPI_WEBHOOK_SECRET_FILE
+                  value: /secrets/vapi-webhook-secret
+                - name: GOOGLE_CLIENT_SECRETS_FILE
+                  value: /secrets/google-client-secret.json
+                - name: GOOGLE_TOKEN_FILE
+                  value: /secrets/google-token.json
+              volumeMounts:
+                - name: app-secrets
+                  mountPath: /secrets
+          volumes:
+            - name: app-secrets
+              secret:
+                secretName: personal-medical-assistant-secrets

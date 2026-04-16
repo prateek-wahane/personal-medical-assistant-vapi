@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from io import BytesIO
-
 
 def test_register_login_and_upload_are_scoped(client):
     first = client.post("/api/auth/register", json={"email": "first@example.com", "password": "StrongPass123"})
@@ -21,6 +19,7 @@ def test_register_login_and_upload_are_scoped(client):
         data={"report_date": "2026-04-15"},
     )
     assert upload_response.status_code == 201
+    assert upload_response.json()["report"]["extraction_method"] == "plain-text"
 
     list_one = client.get("/api/reports", headers=headers_one)
     list_two = client.get("/api/reports", headers=headers_two)

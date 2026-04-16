@@ -54,13 +54,13 @@ def create_access_token(user: User) -> str:
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=settings.auth_token_exp_minutes)).timestamp()),
     }
-    return jwt.encode(payload, settings.auth_secret_key, algorithm="HS256")
+    return jwt.encode(payload, settings.resolved_auth_secret_key, algorithm="HS256")
 
 
 def decode_token(token: str) -> dict:
     settings = get_settings()
     try:
-        return jwt.decode(token, settings.auth_secret_key, algorithms=["HS256"])
+        return jwt.decode(token, settings.resolved_auth_secret_key, algorithms=["HS256"])
     except jwt.PyJWTError as exc:
         raise AuthError("Invalid or expired token.") from exc
 

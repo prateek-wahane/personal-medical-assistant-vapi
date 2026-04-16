@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date, datetime
 from typing import Any
 
@@ -50,6 +52,8 @@ class ReportOut(BaseModel):
     stored_filename: str
     content_type: str
     file_size_bytes: int
+    ocr_used: bool
+    extraction_method: str
     report_date: date
     summary_text: str
     parse_confidence: float

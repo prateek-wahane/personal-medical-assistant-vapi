@@ -11,15 +11,18 @@ from app.config import Settings
 _SAFE_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
 
 
+
 def sanitize_filename(filename: str) -> str:
     base = Path(filename).name
     cleaned = _SAFE_CHARS.sub("_", base).strip("._")
     return cleaned[:120] or "report"
 
 
+
 def build_stored_filename(filename: str) -> str:
     suffix = Path(filename).suffix.lower()
     return f"{uuid4().hex}{suffix}"
+
 
 
 def validate_upload(file: UploadFile, file_bytes: bytes, settings: Settings) -> None:

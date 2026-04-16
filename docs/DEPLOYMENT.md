@@ -1,32 +1,47 @@
 # Deployment
 
-## Local Docker
+## Local production-like run
 
 ```bash
-docker compose up --build
+docker compose -f docker-compose.prod.yml up --build
 ```
 
-The container runs:
-- `alembic upgrade head`
-- `uvicorn app.main:app`
+This stack includes PostgreSQL 16 and the API service.
+
+## Cloud Run deployment shape
+
+Use:
+- `cloudrun/service.yaml` for the web service
+- `cloudrun/ocr-job.yaml` for OCR backfill or batch processing
 
 ## Environment variables to set in production
 
 ```env
 APP_ENV=prod
+JSON_LOGS=true
 DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:5432/medical_assistant
-AUTH_SECRET_KEY=replace-this-with-a-long-random-secret
 CORS_ALLOWED_ORIGINS=https://your-frontend.example
 PUBLIC_BASE_URL=https://your-api.example
-GOOGLE_CALENDAR_ID=primary
-VAPI_WEBHOOK_SECRET=replace-me
+OCR_ENABLED=true
+AUTH_SECRET_KEY_FILE=/secrets/auth-secret
+VAPI_WEBHOOK_SECRET_FILE=/secrets/vapi-webhook-secret
+GOOGLE_CLIENT_SECRETS_FILE=/secrets/google-client-secret.json
+GOOGLE_TOKEN_FILE=/secrets/google-token.json
 ```
+
+## Secrets
+
+Prefer mounted secret files in production over inline environment variables.
+
+The app supports:
+- `AUTH_SECRET_KEY_FILE`
+- `VAPI_WEBHOOK_SECRET_FILE`
 
 ## Minimum production upgrades still recommended
 
-- PostgreSQL instead of SQLite
+- managed PostgreSQL instead of container-local Postgres
 - object storage for report files
-- OCR pipeline for scanned PDFs
-- rate limiting and structured logging
-- secrets manager for OAuth and API secrets
+- OCR language packs based on your user base
+- rate-limit state backed by Redis instead of in-memory storage
+- structured logging sink, error tracking, and metrics dashboards
 - clinician-reviewed recommendation policies

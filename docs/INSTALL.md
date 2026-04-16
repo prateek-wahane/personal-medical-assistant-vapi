@@ -1,38 +1,23 @@
 # Install and Local Setup
 
-## Prerequisites
+## 1. Clone the repo
 
-- Python 3.11 or newer
-- pip
-- Vapi account
-- Google Cloud project with Calendar API enabled
-- OAuth Desktop credentials for Google Calendar
+```bash
+git clone https://github.com/prateek-wahane/personal-medical-assistant-vapi.git
+cd personal-medical-assistant-vapi
+```
 
-## 1. Create a virtual environment
-
-### macOS / Linux
+## 2. Create a virtual environment
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 ```
 
-### Windows PowerShell
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-```
-
-## 2. Install dependencies
+## 3. Install dependencies
 
 ```bash
 pip install -r requirements.txt
-```
-
-## 3. Create environment file
-
-```bash
 cp .env.example .env
 ```
 
@@ -51,6 +36,7 @@ uvicorn app.main:app --reload
 Open:
 - `http://localhost:8000/docs`
 - `http://localhost:8000/health`
+- `http://localhost:8000/ready`
 
 ## 6. Create a user and login
 
@@ -73,18 +59,8 @@ Demo credentials:
 
 Use either:
 - Swagger UI at `http://localhost:8000/docs`
-- your own frontend
-- the included `frontend/index.html`
+- the frontend demo in `frontend/index.html`
 
-Endpoint:
-- `POST /api/reports/upload`
+## 9. OCR note
 
-Form fields:
-- `file`
-- `report_date`
-
-## 9. Important parser note
-
-This hardened starter safely handles common text-based PDFs better than the original version, including labels like `Vitamin B12` and `25-OH Vitamin D`.
-
-If your lab sends scanned-image PDFs, add OCR before expecting high extraction accuracy.
+This production pass can attempt OCR fallback on PDFs when native extraction returns too little text. OCR is controlled by `.env` settings and requires the OCR runtime in the container or local machine.

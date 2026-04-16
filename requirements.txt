@@ -10,6 +10,7 @@ alembic==1.14.1
 requests==2.32.4
 python-dateutil==2.9.0.post0
 pypdf==5.4.0
+psycopg[binary]==3.2.6
 google-api-python-client==2.161.0
 google-auth==2.38.0
 google-auth-oauthlib==1.2.1

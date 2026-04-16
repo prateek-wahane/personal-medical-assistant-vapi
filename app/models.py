@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from datetime import UTC, date, datetime
 from uuid import uuid4
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -32,6 +34,8 @@ class Report(Base):
     stored_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     content_type: Mapped[str] = mapped_column(String(100), default="application/octet-stream")
     file_size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    ocr_used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    extraction_method: Mapped[str] = mapped_column(String(50), default="native-text", nullable=False)
     report_date: Mapped[date] = mapped_column(Date, nullable=False)
     summary_text: Mapped[str] = mapped_column(Text, default="")
     parse_confidence: Mapped[float] = mapped_column(Float, default=0.0)

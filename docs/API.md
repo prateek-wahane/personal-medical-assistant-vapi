@@ -3,7 +3,10 @@
 ## Health
 
 ### `GET /health`
-Returns a simple health response.
+Returns application liveness.
+
+### `GET /ready`
+Checks application readiness including a database probe.
 
 ## Auth
 

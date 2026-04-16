@@ -1,16 +1,18 @@
 FROM python:3.11-slim
 
+ENV PYTHONDONTWRITEBYTECODE=1     PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+RUN apt-get update     && apt-get install -y --no-install-recommends tesseract-ocr ghostscript pngquant qpdf unpaper     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir ocrmypdf==16.13.0
 
 COPY . .
 
-RUN mkdir -p /app/uploads /app/credentials
+RUN mkdir -p /app/uploads /app/credentials /app/secrets
 
 EXPOSE 8000
 

@@ -22,7 +22,7 @@ from app.services.auth import get_current_user
 from app.services.calendar_service import CalendarServiceError, create_calendar_event
 from app.services.comparison import compare_lab_results, summarize_comparison
 from app.services.lab_extractor import extract_lab_markers
-from app.services.pdf_parser import extract_text
+from app.services.pdf_parser import extract_text_details
 from app.services.recommendations import recommendation_for_marker
 from app.services.upload_security import build_stored_filename, sanitize_filename, validate_upload
 
@@ -48,8 +48,9 @@ async def upload_report(
     stored_path = upload_dir / stored_filename
     stored_path.write_bytes(file_bytes)
 
-    raw_text = extract_text(file_bytes, original_filename)
-    parsed_markers, warnings, confidence = extract_lab_markers(raw_text)
+    extraction = extract_text_details(file_bytes, original_filename)
+    parsed_markers, warnings, confidence = extract_lab_markers(extraction.text)
+    warnings = [*warnings, *extraction.warnings]
 
     report = Report(
         user_id=current_user.id,
@@ -57,8 +58,10 @@ async def upload_report(
         stored_filename=stored_filename,
         content_type=file.content_type or "application/octet-stream",
         file_size_bytes=len(file_bytes),
+        ocr_used=extraction.ocr_used,
+        extraction_method=extraction.method,
         report_date=report_date,
-        raw_text=raw_text,
+        raw_text=extraction.text,
         parse_confidence=confidence,
     )
     db.add(report)
@@ -81,8 +84,9 @@ async def upload_report(
         )
 
     abnormal = [m for m in parsed_markers if m.status in {"low", "high"}]
+    extraction_note = " using OCR" if extraction.ocr_used else ""
     report.summary_text = (
-        f"Parsed {len(parsed_markers)} markers from {original_filename}. "
+        f"Parsed {len(parsed_markers)} markers from {original_filename}{extraction_note}. "
         + (
             "Abnormal markers: " + ", ".join(f"{m.marker_label} ({m.status})" for m in abnormal[:8])
             if abnormal
